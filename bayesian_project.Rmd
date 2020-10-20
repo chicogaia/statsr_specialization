@@ -1,0 +1,456 @@
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(BAS)
+library(broom)
+```
+
+### Load data
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+#Predicting Movies' Audience Scores from Selected Variables
+
+* * *
+
+## Part 1: Data
+
+The data is a random sample of movies released before 2016 and some of their attributes, including critics' ratings and audience scores from Rotten Tomatoes (RT) website, as well as audience ratings from the IMDb platform.   
+Being renadomly sampled, results fro our analyses may be generalizable to the population (of movies); no random assignment of any kind was performed, though: this is an observational studym, thus, causation inferences or conclusions are not possible.     
+
+The characteristics of pre-2016 movies may be different from the more recent ones, as well as critics and general audience preferences. Therefore, our prediction model may not be replicable to newer movies.     
+Geographic differences may also exist, by which critics and the general public would potentially have different criteria in evaluating the movies they watch in different parts of the world.
+
+Although our goal in the present study is to model significant predictors of Audience Score in the RT platform, it is interesting to notice that there may be other potential implications in combining ratings from two different platforms:          
+RT is an aggregator of reviews from critics (that are read by RT staff), that also features a score from the audience; whereas IMDb features only a score given by votes from the IMDb website and/or mobile app users.       
+In that sense, IMDb rating may be a more reliable measure of how a movie is perceived by the target audience, since RT rating is based not only on the review given by a critic - who may have very different criteria than the general audience for what is a "good movie" - but also on the critic reader (RT staff) who is the one to decide whether a particular review is positive or negative. Furthermore, critics scores are based on a much smaller number of critics than the number of viewers rating movies in IMDb, thus being potentially more biased by individual preferences.
+
+* * *
+
+## Part 2: Data manipulation
+
+Some of the variables needed are not currently part of the present dataset. We will add them as follows:
+
+### *feature_film*
+States whether or not a movie is categorized as a Feature Film ("yes")
+
+```{r create variable feature_film}
+movies <- movies %>%
+  mutate(feature_film = ifelse(title_type == "Feature Film" , "yes" , "no"))
+```
+
+### *drama*
+States whether or not a movie is categorized as genre Drama ("yes")
+
+```{r create variable drama}
+movies <- movies %>%
+  mutate(drama = ifelse(genre == "Drama" , "yes" , "no"))
+```
+
+### *mpaa_rating_R*
+States whether or not a movie is R-rated ("yes")
+
+```{r create variable mpaa_rating_R}
+movies <- movies %>%
+  mutate(mpaa_rating_R = ifelse(mpaa_rating == "R" , "yes" , "no"))
+```
+
+### *oscar_season*
+States whether or not the movie was released during oscar season ("yes" : October, November or December)
+
+```{r create variable oscar_season}
+movies$oscar_season <- ifelse(movies$thtr_rel_month %in% c("10" , "11" , "12") , "yes" , "no")
+```
+
+### *summer_season*
+States whether or not the movie was released during summer ("yes" : May, June, July, or August)
+
+```{r create variable summer season}
+movies$summer_season <- ifelse(movies$thtr_rel_month %in% c("5" , "6" , "7" , "8"), "yes" , "no")
+```
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+The exploratory analysis of this study will investigate whether or not Audience Scores are correlated in any way with the new variables we created in *Part 2: Data Manipulation*
+
+### Audience Score Distribution
+
+The summary statistics and historgram below show the distribution of Audience Scores as recorded on the Rotten Tomatoes platform:
+
+```{r audience score summary}
+summary(movies$audience_score)
+```
+
+```{r audience score distribution }
+ggplot(movies, aes(audience_score)) +
+  geom_histogram(binwidth = 3) +
+  geom_vline(xintercept = mean(movies$audience_score), linetype = "dashed", colour = "blue", size = 1) +
+  geom_vline(xintercept = median(movies$audience_score), linetype = "dotted", colour = "red", size = 1) +
+  labs(title = "Audience Score Distribution",
+       x = "Audience Score", y = "Number of Movies",
+       caption = "Blue line: Mean Score | Red line: Median score")
+```
+
+### Audience Score and *feature_film* :
+
+The table below shows that `r (sum(movies$feature_film == "yes") / nrow(movies)) * 100`% of movies in the RT platform are feature films, which tend to receive, on average, lower audience scores.
+
+```{r audience score and category summary}
+movies %>%
+  group_by(feature_film) %>%
+  summarise("Number of Films" = n() ,
+            "As % of Total" = n()/nrow(movies)*100,
+            "Mean Score" = mean(audience_score))
+```
+
+The chart below illustrates it further: movies not categorized as Feature Films tend to receive higher scores that those that are and, additionally, **always** receive higher scores than the overall average of all movies.
+
+```{r audience score and category boxplot}
+ggplot(movies, aes(feature_film , audience_score)) +
+  geom_boxplot() +
+  geom_hline(yintercept = mean(movies$audience_score) , linetype = "dashed", colour = "blue" , size = 1) +
+  labs(title = "Audience Score Distribution by Film Category" , 
+       x = "Film Category: Feature" , y = "Audience Score" , caption = "Blue line: Mean Overall Score")
+```
+
+That may be a surprising result and we may hypothesize the reasons: "no" Feature Films are also more rarely seen and evaluated in RT platform. One possible reason is that these are "niche" interests, like documentaries, seen by a smaller audience, who is in fact already interested in the Documentaries they choose to watch, thus biasing the scores they give this movie genre, in general.      
+Additional analysis is needed to sustain that hypothesis and, possibly, raise and evaluate others.
+
+### Audience Score and *drama* :
+
+The table below shows that `r (sum(movies$drama == "yes") / nrow(movies)) * 100`% of movies in the RT platform are Drama, which tend to receive, on average, slightly higher audience scores.
+
+```{r audience score and genre summary}
+movies %>%
+  group_by(drama) %>%
+  summarise("Number of Films" = n() ,
+            "As % of Total" = n()/nrow(movies)*100,
+            "Mean Score" = mean(audience_score))
+```
+
+The chart below illustrates it further: Drama movies tend to receive slightly higher scores that other genres, as well as higher scores than the overall average of all movies.
+
+```{r audience score and genre boxplot}
+ggplot(movies, aes(drama , audience_score)) +
+  geom_boxplot() +
+  geom_hline(yintercept = mean(movies$audience_score) , linetype = "dashed", colour = "blue" , size = 1) +
+  labs(title = "Audience Score Distribution by Film Genre" , 
+       x = "Film Genre : Drama" , y = "Audience Score" , caption = "Blue line: Mean Overall Score")
+```
+
+### Audience Score and *mpaa_rating_R* :
+
+The table below shows that `r (sum(movies$mpaa_rating_R == "yes") / nrow(movies)) * 100`% of movies in the RT platform are R rated films, which tend to receive, on average, slightly lower audience scores. Hypothesis testing could reveal whether or not that is a statistically sgnificant difference.
+
+```{r audience score and rating summary}
+movies %>%
+  group_by(mpaa_rating_R) %>%
+  summarise("Number of Films" = n() ,
+            "As % of Total" = n()/nrow(movies)*100,
+            "Mean Score" = mean(audience_score))
+```
+
+The chart below illustrates it further: it is not obvious whether or not R rating is a significant predictor of differences in audience score of movies: distributions of score are very similar among the two categories.
+
+```{r audience score and rating boxplot}
+ggplot(movies, aes(mpaa_rating_R , audience_score)) +
+  geom_boxplot() +
+  geom_hline(yintercept = mean(movies$audience_score) , linetype = "dashed", colour = "blue" , size = 1) +
+  labs(title = "Audience Score Distribution by Film Rating" , 
+       x = "Film Rating : R" , y = "Audience Score" , caption = "Blue line: Mean Overall Score")
+```
+
+### Audience Score and *oscar_season* :
+
+The table below shows that `r (sum(movies$oscar_season == "yes") / nrow(movies)) * 100`% of movies in the RT platform are launched during Oscar Season and tend to receive, on average, slightly higher audience scores. Hpypothesis testing could reveal whether or not that is a statistically sgnificant difference.
+
+```{r audience score and launch timing summary}
+movies %>%
+  group_by(oscar_season) %>%
+  summarise("Number of Films" = n() ,
+            "As % of Total" = n()/nrow(movies)*100,
+            "Mean Score" = mean(audience_score))
+```
+
+The chart below illustrates it further: movies launched during Oscar Season tend to receive slightly higher scores.
+
+```{r audience score and launch timing boxplot}
+ggplot(movies, aes(oscar_season , audience_score)) +
+  geom_boxplot() +
+  geom_hline(yintercept = mean(movies$audience_score) , linetype = "dashed", colour = "blue" , size = 1) +
+  labs(title = "Audience Score Distribution by Film Launch Timing" , 
+       x = "Film Launched in Oscar Season" , y = "Audience Score" , caption = "Blue line: Mean Overall Score")
+```
+
+### Audience Score and *summer_season* :
+
+The table below shows that `r (sum(movies$summer_season == "yes") / nrow(movies)) * 100`% of movies in the RT platform are launched during Summer and tend to receive, on average, slightly lower audience scores. Hpypothesis testing could reveal whether or not that is a statistically sgnificant difference.
+
+```{r audience score and launch season summary}
+movies %>%
+  group_by(summer_season) %>%
+  summarise("Number of Films" = n() ,
+            "As % of Total" = n()/nrow(movies)*100,
+            "Mean Score" = mean(audience_score))
+```
+
+The chart below illustrates it further. It is not obvious whether or not Launch Season is a significant predictor of differences in audience score of movies: distributions of score are very similar among the two categories.
+
+```{r audience score and launch season boxplot}
+ggplot(movies, aes(summer_season , audience_score)) +
+  geom_boxplot() +
+  geom_hline(yintercept = mean(movies$audience_score) , linetype = "dashed", colour = "blue" , size = 1) +
+  labs(title = "Audience Score Distribution by Film Launch Season" , 
+       x = "Film Launched in Summer" , y = "Audience Score" , caption = "Blue line: Mean Overall Score")
+```
+
+* * *
+
+## Part 4: Modeling
+
+Our study aims to define predictive variables of audience scores in the RT platform and to build a Bayesian regression model  that may accurately predict audience scores from such variables.
+
+The *full model* will consider all the variables below:
+
+- `feature_film`
+- `drama`
+- `runtime`
+- `mpaa_rating_R`
+- `thtr_rel_year`
+- `oscar_season`
+- `summer_season`
+- `imdb_rating`
+- `imdb_num_votes`
+- `critics_score`
+- `best_pic_nom`
+- `best_pic_win`
+- `best_actor_win`
+- `best_actress_win`
+- `best_dir_win`
+- `top200_box`
+
+Since we have no previous information regarding the modeling of audience score predictors, we will assign a uniform prior probability for all models and use Zellner-Siow cauchy prior approach, as it is widely used and tends to provide results that are between the two extremes BIC and AIC.
+
+```{r generate bayesian model}
+#Remove observations with missing values
+movies_clean <- na.omit(movies)
+
+#Fit Bayesian Linear Regression
+audsco_bas <- bas.lm(audience_score ~ 
+                       feature_film +
+                       drama +
+                       runtime +
+                       mpaa_rating_R +
+                       thtr_rel_year +
+                       oscar_season +
+                       summer_season +
+                       imdb_rating +
+                       imdb_num_votes +
+                       critics_score +
+                       best_pic_nom +
+                       best_pic_win +
+                       best_actor_win +
+                       best_actress_win +
+                       best_dir_win +
+                       top200_box ,
+                     data = movies_clean , 
+                     prior = "ZS-null" , 
+                     modelprior = uniform())
+
+#Marginal posterior inclusion probabilities for each variable
+audsco_bas
+```
+
+From the posterior inclusion probabilities of each variable above, the top 3 are:
+
+- `imdb_rating` with 100%     
+- `critics_score` with 91.46%     
+- `runtime` with 51.04%      
+
+In fact, from the chart below , it becomes visually clear that these are the only three variables with over 50% probability of inclusion:
+
+```{r model diagnostics}
+plot(audsco_bas, which = 4)
+```
+
+Additionally, from the summary below, we observe that these are the only variables included in the highest probability model (*model 1*), with a 14.44% probability. Given that our prior probabilities were defined as uniform, this is impressive result.
+Note, however, that *model 2*, the second most probable model, has very similar probability: 14.33%, and the only difference between models 1 and 2 is the exclusion of the variable `runtime`.
+
+```{r }
+summary(audsco_bas)
+```
+
+The variable `runtime` is the third most likely variable for inclusion, with 51.04% probability but causes only a very small effect in the probability of most likely models.      
+**WHY?**
+
+We should try and understand, then, the potential effect of `runtime` being present or not in our final model. After all, we aim to develop a parsimonial model that has actionable variables for a film producer who aims to achieving higher audience scores.
+
+From the summary of coefficients below (BMA based), we may observe that `runtime`, although with high probability of inclusion,  has little actual effect on audience scores: for every extra minute of film, we expect audience score to decrease, on average, by 0.03 points.      
+Including such variable in the final model would mean us recommending that a film producer seeking to achieve higher audience scores should decrease by a considerable amount the length of their movies (eg. removing 100 minutes for an expected extra 3 points in a score scale that ranges from 1 to 100), which is most likely to negatively affect storytelling and, thus, reducing final audience scores.
+
+```{r}
+coef(audsco_bas)
+```
+
+Additionally, from the chart below, we observe that there is likely an outlier in `runtime` : a movie that is over 250 minutes long and has not received high audience scores:
+
+```{r runtime distribution}
+ggplot(movies_clean , aes(runtime, audience_score, colour = runtime > 250)) +
+  geom_point() +
+  labs(title = "Audience Score vs Runtime" ,
+       x = "Runtime" , y = "Audience Score",
+       colour = "Runtime over 250 minutes")
+```
+
+As a summary, in the image below we observe how models 1 and 2 have very similar probability and the only variable that differ is the exclusion of `runtime` in *model 2*:
+
+```{r models summary}
+image(audsco_bas, rotate = F)
+```
+
+Given our analysis on the variable `runtime` and its potential meaning for Audience Score, our final chosen model is **model 2**, which is virtually as probable as model 1 (by a narrow margin) and excludes Runtime.
+
+```{r final multivariate model for audience score}
+audsco_final <- lm(audience_score ~ imdb_rating + critics_score , movies)
+```
+
+*Model 2* considers only two variables for predicting Audience Scores with information collected from digital rating platforms: the IMDb ratings and the Critics Scores attributed to a given movie.
+
+We may explore their individual relationship to Audience Scores:
+
+### Audience Score and IMDb Ratings:
+
+The chart below shows that IMDb Ratings and Audience Scores on RT are highly correlated (R:`r cor(movies$imdb_rating , movies$audience_score)`), which is expected as these correspond to a very similar input: the general public scores given to a movie on a digital platform. We may hypothesize that the some of these applications users are the same individuals, thus giving the same scores to a given movie in both platforms (only in different scales).
+
+```{r audience score and IMdb rating correlation}
+ggplot(movies, aes(imdb_rating, audience_score)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(title = "Audience Score vs IMDb Ratings", 
+         x = "IMDb Ratings" , y ="Audience Scores")
+```
+
+### Audience Score and Critics Ratings:
+
+Similarly, Audience Scores and Critics Ratings are also positively correlated (R:`r cor(movies$critics_score , movies$audience_score)`), although with higher degrees of associated error, as shown by the scatterplot below. That may be caused by the general  public and the critics not always agreeing on what are the intangible factors that make a movie great. Particularly, we observe that it is not rare for a movie to receive low crtics' rating and high audience scores.
+
+```{r audience score and critics rating correlation}
+ggplot(movies, aes(critics_score, audience_score)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(title = "Audience Score vs Critics Ratings", 
+         x = "Critics Ratings" , y ="Audience Scores")
+```
+
+### Model Diagnostics on Final Model:
+
+```{r Diagnostics Plots}
+audsco_final_aug <- augment(audsco_final)
+
+#Normal Probability Plot of Residuals
+ggplot(audsco_final_aug) +
+  geom_qq(aes(sample = .std.resid)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(title = "Normal Probability Plot of Residuals | Model 2" , 
+    x = "Theoretical quantiles", y = "Standardized residuals")
+
+#Residuals Distribution
+ggplot(audsco_final_aug, aes(.resid)) +
+  geom_histogram(binwidth = 5) +
+  labs(title = "Residuals Distribution | Model 2" , 
+       x = "Residuals Values" , y ="Number of Residuals")
+
+#Residuals Plot
+ggplot(audsco_final_aug , aes(.fitted , .resid)) +
+  geom_point(alpha=0.5) +
+  geom_hline(yintercept = 0 , linetype = "dashed") +
+  labs(title = "Plot of Residuals | Model 2" , 
+       x = "Fitted Values" , y ="Residuals")
+```
+
+Our final model residuals are nearly normally distributed around zero, with exception of some extreme values. The Residuals scatterplot, however, show some heterosceidasticity in the direction of lower values: we hypothesize that this is caused by the bigger variation that exists between critics ratings and audience scores for movies poorly rated by the critics.
+
+Let us explore this effect further:
+
+```{r}
+summary(audsco_final)
+```
+
+The summary statistics above show that higher audience scores are expected as movies receive higher Critics' rating, on average.      We have shown, however, that such correlation is weaker for poorly rated movies by the critics. What that means for our model is that, its variability (error) will be higher when a movie is poorly rated by the critics: it will predict lower audience scores but, in fact, there is a high chance that the general public will give it higher ratings.
+
+### Conclusion on Model Selection:
+
+Although with high posterior probability of inclusion, as the variable `runtime` has only little effect on the prediction of audience scores and is not an actionable item from a movie Business perspective, our final chosen model is **model 2**, which predicts Audience Scores on the RT platform from two variables:     
+
+- `imdb_rating` : Rating on IMDB       
+- `critics_score` : Critics score on Rotten Tomatoes      
+
+* * *
+
+## Part 5: Prediction
+
+We can use our final model to predict the popularity, measured by IMDb rating, of a new movie.
+
+###Movie: **Deadpool**
+
+![Movie: Deadpool, 2016][Deadpool]
+
+The relevant attributes to be considered for our model are:
+
+Attribute     | Value
+--------------|--------
+IMDb rating   | 8.0
+Critics Score | 85
+
+```{r}
+Deadpool <- data.frame(imdb_rating =8.0 , critics_score = 85)
+predict(audsco_final, Deadpool, interval = "prediction", level = 0.95)
+```
+
+Our model predicts, in a 95% confidence interval, that the movie *Deadpool* will have an audience score between **66 and 100** (upper interval limit is 106, but max score is 100).
+
+According to the RT website *(visited on October 10th 2020)*, *Deadpool* audience score is **90**, thus **inside** the 95% confidence interval of our model.
+
+We have discussed in the section *Part 1: DATA* that popularity attributes may change over time, and our model may not be fit to movies released after 2016.
+
+Let us explore that with the movie *Joker*, released in 2019, directed by Todd Phillips.
+
+###Movie: **Joker**
+
+![Movie: Joker, 2019][Joker]
+
+The relevant attributes to be considered for our model are:
+
+Attribute     | Value
+--------------|--------
+IMDb rating   | 8.5
+Critics Score | 68
+
+
+```{r}
+Joker <- data.frame(imdb_rating =8.5 , critics_score = 68)
+predict(audsco_final, Joker, interval = "prediction", level = 0.95)
+```
+
+Our model predicts, in a 95% confidence interval, that the movie *Joker* will have an audience score between **72 and 100** (upper interval limit is 112, but max score is 100).
+
+According to the RT website *(visited on October 10th 2020)*, *Joker* audience score is **88**, thus **inside** the 95% confidence interval of our model.
+
+* * *
+
+## Part 6: Conclusion
+
+Utilizing Bayesian Regression we have been able to select a high probability model for predicting audience scores of movies as rated by users of the application Rotten Tomatoes. Our selected model takes into consideration IMDb ratings and Critics Ratings and has been able to accurately predict, in a 95% confidence interval, the audience score of a 2016 movie, *Deadpool* (release year within range of our original dataset) as well as a 2019 movie, *Joker*, suggesting that predicitive factors for audience scores are maintained accross this period.
+
+[Deadpool]:D:\Cursos\R Programming\Specialization_Coursera_Duke_Statistics with R\4_Bayesian Statistics\Project/Deadpool.jpg
+[Joker]:D:\Cursos\R Programming\Specialization_Coursera_Duke_Statistics with R\4_Bayesian Statistics\Project/Joker.jpg

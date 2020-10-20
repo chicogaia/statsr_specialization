@@ -1,0 +1,436 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+
+### Load data
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+* * *
+
+## Part 1: Data
+
+The Behaviorial Risk Factor Surveillance System collects data on preventive health practices and risk behaviors that are linked to preventable infectious diseases, injuries and chronic diseases that affect the adult population via phone interviews (landline and cellular) of randomly selected non-institutionalized adults (18 years or older) residing in the United States (US) and participating US territories.      
+The findings may be generalized to the whole non-institutionalized adult population of each participant state/territory, as it is randomly sampled - and, therefore, to the whole US population. Although associations may be found, causality can not be inferred, since this is a retrospective observational study, with no random assignment.     
+Finally, all collected data is heavily reliant on the respondents perception, self-awaraness and memory, making measures potentially unprecise (e.g. number of cigarettes smoked or number of alcoholic everages consumed).
+
+* * *
+
+## Part 2: Research questions
+
+We will investigate three factors and their potential association with a history of depressive disorders:     
+1) Being a veteran of war;     
+2) Alcohol consumption habits;      
+3) Being part of a couple who lives together.   
+
+**Research question 1:**       
+Is being Veteran of war positively or negatively associated with a history of depression, and how does it relate to the individual's perception of mentail illness treatment effectiveness?
+
+**Research question 2:**         
+Is depression diagnosis associated with higher alcohol consumption?
+
+**Research question 3:**         
+Is there evidence that being married is associated with a deppresive disorder history, and how does it relate to living alone or with other adults?
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+###**Research question 1:**
+
+We are interested in investigating whether or not being a veteran of war in the US Military can be associated with higher rates of depressive disorder diagnosis.
+
+In the BRFSS survey, a history of depression diagnosis is determined by the respondent's memory f having ever been diagnosed with a depressive disorder. Answers to this question can be interpreted as "Yes, I have been told I have a depressive disorder" and "No, I have never been told I have a depressive disorder".
+
+```{r depression diagnosis frequency plot}
+ggplot(brfss2013 , aes(addepev2)) +
+  geom_bar() +
+  geom_text(stat="count" , aes(label = after_stat(count), vjust = -0.25)) +
+  labs(title = "Answers to 'Have you ever been told to have a depressive disorder?'", x = "Answer" , y = "Count")
+```
+
+We can see that 2,289 people refused to answer or did not know how to answer this question.We will not consider these non-respondents in the analysis.       
+
+We can calculate the overall rate of depressive disorder diagnosis in the non-institutionalized US adult population:
+
+```{r depression diagnosed probability excluding non respondents}
+brfss2013 %>%
+  filter(!is.na(addepev2)) %>%
+  summarise("Depression Diagnosis Rate among US Adults" = sum(addepev2 == "Yes") /n())
+```
+
+Randomly picking a non-institutionalized US adult, there is a **19.56% probability that he/she has been diagnosed with a depressive disorder** at some point in his/her life.
+
+We are interested in identifying significant changes to that probability in Veterans.
+
+The chart below shows that 61,446 people have answered with "Yes" to the question "Are you a Veteran?".
+
+```{r veterans frequency}
+ggplot(brfss2013, aes(veteran3)) +
+  geom_bar() +
+  geom_text(stat = 'count' , aes(label = after_stat(count), vjust=-0.25 )) +
+  labs(title = "Answers to the question 'Are you a Veteran?'" , x = "Answer" , y = "Count")
+```
+
+Excluding non respondents ("NA"), we can calculate that **approximately 12.51%** of non-institutionilized US adults are veterans:
+
+```{r veterans relative frequency}
+brfss2013 %>%
+  filter(!is.na(veteran3)) %>%
+  summarise("Proportion of Veterans among US Adults" = sum(veteran3 == "Yes") / n())
+```
+
+What is the depression diagnosis rate among Veterans alone, and how does it compare to the total population average?
+
+```{r veterans depression frequency}
+ggplot(subset(brfss2013, veteran3 == "Yes") , aes(addepev2)) +
+  geom_bar() +
+  geom_text(stat = "count" , aes(label = after_stat(count), vjust = -0.25)) + 
+  labs(title = "Veteran answers to 'Have you been diagnosed with Depression?'", x = "Answer", y = "Count")
+```
+
+Excluding non-respondents ("NA"), we can calculate that, **among US Veterans, there is a 16.27%** chance that one randomly picked non-institutionalized adult has ever been diagnosed with depression.
+
+```{r relative frequency of depression diagnosis among Veterans}
+brfss2013 %>%
+  filter(veteran3 == "Yes") %>%
+  filter(!is.na(addepev2)) %>%
+  summarise("Depression Diagnosis Rate among Veterans" = sum(addepev2 == "Yes") / n())
+```
+
+To answer the question of whether the depression diagnosis rate among US Veterans is different from that of the overall adult population, we will conduct a hypothesis test: do we have enough evidence that these rates are different?  
+
+In other words: **is 16.27% significantly different from 19.56%?**
+
+We have 61,137 Veterans in the BRFSS sample who answered the question about Depression diagnosis.
+
+With a 19.56% rate of depression for the overall population, we would expect to have, on average, 0.1956 x 61,137 = 11,958 people with a diagnosis of depression in a sample of 61,137 randomly picked people.
+
+So, under those conditions, what is the probability of having 9,949 diagnosis instead?
+
+Although we are working with a Binomial variable ("Yes" or "No" Answers, Independent Trials), a Normal distribution approximation is possible:      
+np > 10       
+n(1-p) > 10
+
+```{r normal approximation probability distribution}
+pnorm(9949 , 11958, sqrt(61137*0.1956*(1-0.1956)))
+```
+
+With a 19.56% depression diagnosis rate for the overall US population, the probability of having 9,949 diagnosis in a random sample of 61,137 US adults is extremely low.
+
+Therefore, at a significance level of 5%, we have enough evidence that **the depression diagnosis rate among Veterans is lower** than that of the overall US non-institutionalized adult population.
+
+Note that we cannot state whether the **depression rate** is different among Veterans - but only the **diagnosis rate**, as stated/remembered by the respondents of the BRFSS survey.       
+We may further hypothesize that Veterans who feel depressed do not seek help as often as the average adult, or that Veterans tend to deny or forget previously received depression diagnosis more than the average adult, thus expressing lower diagnosis rates.
+
+The survey offers the possibility of exploring that hypothesis: **are Veterans seeking less health advise** for issues related to their mental wellbeing?
+
+The chart below shows the probability distribution of number of days not feeling good mentally in the past 30 days, for the respondents who claim to have received a previous diagnosis of depression.
+
+```{r days of not feeling good veterans vs others}
+ggplot(subset(brfss2013, addepev2 == "Yes"), aes(menthlth, fill=veteran3)) +
+  geom_density(alpha=0.5) +
+  labs(title = "Probability Distribution of Respondents by Number of Days of Not Feeling Good", x = "Number of Days of Not Feeling Good in the Past 30 Days" , y = "Probability Distribution", fill = "Veteran")
+```
+
+Graphically, there seems to be no apparent difference in the frequency of "Not Feeling Good Mentally" between Veterans and Non veterans, although the hypothesis test conducted before showed evidence that the depression diagnosis rate amongst veterans is lower than for non-Veterans.
+
+We may investigate, then, whether there is a significant difference in attitude towards mental health amongst Veterans, compared to the rest of the US adult population: we will consider that a person agrees that treatment can help people with mental illness lead normal lives if they have answered "Agree strongly" or "Agree slightly" to that question in the BRFSS survey.
+
+```{r agree/disagree group}
+brfss2013 <- brfss2013 %>%
+  mutate(mthlth_agree = ifelse(mistrhlp == "Agree strongly" | mistrhlp == "Agree slightly" , "Agree" , "Disagree"))
+brfss2013 %>%
+  group_by(mistrhlp , mthlth_agree) %>%
+  summarise(count = n())
+```
+
+We can calculate the percentage of the US adults who agree that treatment can help when meantlly ill, excluding those who did not answer the "Agree/Disagree" question ("NA"): 
+
+```{r percentage of US adults who agree}
+brfss2013 %>%
+  filter(!is.na(mthlth_agree)) %>%
+  summarise("Percentage of US adults who 'Agree'" = sum(mthlth_agree == "Agree")/n())
+```
+
+Considering the overall population, **there is a 92.93% chance** that a randomly picked non-institutionalized US adult agrees that treatment can help manage metal health.
+
+How does that probability compares with that from the Veterans pool?
+
+```{r percentage of veterans who agree}
+brfss2013 %>%
+  filter(veteran3 == "Yes") %>%
+  filter(!is.na(mthlth_agree)) %>%
+    summarise("Percentage of US Veterans who agree" = sum(mthlth_agree == "Agree") / n())
+```
+
+Amongst Veterans, the "Agree" rate is slightly lower: **90.30%**.
+
+We will conduct hypothesis testing to evaluate whether it is significantly lower:
+
+```{r Veteran respondents to "Agree/Disagree"}
+brfss2013 %>%
+  filter(veteran3 == "Yes") %>%
+  filter(!is.na(mthlth_agree)) %>%
+  group_by(mthlth_agree) %>%
+  summarise("Number of Veteran Respondents" = n())
+```
+
+In this sample of the BRFSS survey, we have 3,976 + 27 = 4,403 veterans who answered the "Agree/Disagree" question.
+We have calculated that, for the overall US population, the probability of a randomly picked adult "agreeing" is 0.9299.
+
+If the Veterans were no different in their approach towards mental health, we would expect, then, to have 0.9299 x 4,403 = 4,094 veterans who "Agree".
+Our sample has, however, 3,976 veterans who agree.
+
+Given the Binomial distribution for that variable (categorical, two possible outcomes, random sample with independent trials):
+
+```{r binomial cumulative probability}
+sum(dbinom(1:3976, 4403, 0.9299))
+```
+
+There is an extremely low probability of having a random sample of 4403 US adults that contains 3976 people or less who agree that mental health treatment helps, given a 92.99% chance that a US adult agrees with that statement.
+
+Therefore, at a 5% significance level, we have evidence to accept the hypothesis that *the "Agree" rate among Veterans is lower* than that of the average US adult.
+
+**Conclusion**     
+**Depression diagnosis rate is significantly lower among US Veterans**, relative to the average non institutionilized US adult population. However, we have also evidence that **US Veterans are less likely to believe** that a mental health treatment can help people with mental illness live normal lives.     
+Therefore, the lower rates of depression diagnosis amongst Veterans may be associated with the fact that **Veterans are less likely to seek help**, thus, less likely to be diagnosed - and/or, that **they tend to either deny or forget** a previously received diagnosis for depression.     
+A different kind of investigation is needed to assess the true depression rate in the population (not only the diagnosis rate) to understand whether depressive disorder rates amongst veterans is different from the average non Veteran US adult.
+
+
+###**Research question 2:**
+
+Are depressive disorders associated with higher alcohol consumption?
+
+The BRFSS survey has a section on alcohol consumption that collects data about the participants' frequency and quantity of alcohol consumed.     
+The database also contains calculated variables from the answers given to those questions: the researchers considered that a "Heavy Drinker" is an adult male having more than two drinks per day or an adult female having more than one drink per day, on average for the past 30 days.
+
+The chart below shows how many participants were considered heavy drinkers, by sex, excluding those who did not answer the question about frequency/quantity of alcohol consumed:
+
+```{r frequency of heavy alcohol consumption by gender}
+ggplot(subset(brfss2013, !is.na(X_rfdrhv4)), aes(X_rfdrhv4)) +
+  geom_bar() +
+  geom_text(stat = "count" , aes(label = after_stat(count), vjust = -0.3)) +
+  facet_wrap(~sex) +
+  labs(title = "Computed values of 'Heavy Alcohol Consumption by Sex'" , x = "Heavy Alcohol Consumption" , y = "Count")
+```
+
+We can calculate the rates of heavy alcohol consumption amongst men and women: **6.2% and 4.9%**, respectively.
+
+```{r heavy drinkers male}
+brfss2013 %>%
+  filter(sex == "Male") %>%
+  filter(!is.na(X_rfdrhv4)) %>%
+  summarise("Percent Heavy Drinker, Male" = sum(X_rfdrhv4 == "Yes")/n())
+```
+
+```{r heavy drinkers female}
+brfss2013 %>%
+  filter(sex == "Female") %>%
+  filter(!is.na(X_rfdrhv4)) %>%
+  summarise("Percent Heavy Drinker, Female" = sum(X_rfdrhv4 == "Yes")/n())
+```
+
+We are interested in whether these rates change significantly or not amongst the population that has been previously diagnosed with a depressive disorder:
+
+```{r heavy drnkers frequency sex and depression}
+brfss2013_dep <- subset(brfss2013, !is.na(addepev2))
+ggplot(subset(brfss2013_dep, !is.na(X_rfdrhv4)), aes(X_rfdrhv4, fill = addepev2)) +
+  geom_bar() +
+  facet_wrap(~sex + addepev2) +
+  geom_text(stat = "count", aes(label = after_stat(count) , vjust = -0.3)) +
+  coord_cartesian(ylim = c(0 , 250000)) + 
+  labs(title = "'Heavy Alcohol Consumption' by Sex and Depression Diagnosis" , x = "Heavy Alcohol Consumption" , y = "Count", fill = "Depression Diagnosis")
+```
+
+We can calculate the "Heavy Drinker" rate for each one of these four groups:
+
+```{r Heavy Drinker depressed males}
+brfss2013 %>%
+  filter(sex == "Male" , addepev2 == "Yes", !is.na(X_rfdrhv4)) %>%
+  summarise("Percent Heavy Drinker, Male, Depressed" = sum(X_rfdrhv4 == "Yes")/n())
+```
+
+```{r Heavy Drinker depressed females}
+brfss2013 %>%
+  filter(sex == "Female" , addepev2 == "Yes", !is.na(X_rfdrhv4)) %>%
+  summarise("Percent Heavy Drinker, Female, Depressed" = sum(X_rfdrhv4 == "Yes")/n())
+```
+
+```{r Heavy Drinker not depressed males}
+brfss2013 %>%
+  filter(sex == "Male" , addepev2 == "No", !is.na(X_rfdrhv4)) %>%
+  summarise("Percent Heavy Drinker, Male, Not Depressed" = sum(X_rfdrhv4 == "Yes")/n())
+```
+
+```{r Heavy Drinker not depressed females}
+brfss2013 %>%
+  filter(sex == "Female" , addepev2 == "No", !is.na(X_rfdrhv4)) %>%
+  summarise("Percent Heavy Drinker, Female, Not Depressed" = sum(X_rfdrhv4 == "Yes")/n())
+```
+
+The table below summarises the calculated probability of heavy alcohol consumption by sex and depression diagnosis:
+
+Percent Heavy Drinker (%)  |  Diagnosed  |  Not Diagnosed  | Overall Population
+---------------------------|-------------|-----------------|--------------------
+Male                       |    6.95     |      6.09       |        6.23
+Female                     |    5.50     |      4.75       |        4.92
+
+We will conduct hypothesis testing considering an approximation to Normal of the "Heavy Drinker" probability among the overall population by sex.
+
+```{r probability of Heavy Drinker Male Diagnosed current sample }
+1 - pnorm(1896, 0.0623*(1896+25362) , sqrt(((1896+25362)*0.0623)*(1-0.0623)))
+```
+
+The probability of having the current "Heavy Drinker, Male, Diagnosed" sample (or more extreme), is very low, given the Heavy Drinker rate for the overall male population.   
+
+We have enough evidence to say that **depressed males tend to have higher rates of heavy alcohol consumption** than the average non institutionalized US adult male. 
+
+```{r probability of Heavy Drinker Female Diagnosed current sample }
+1 - pnorm(3574, 0.0492*(3574+61389) , sqrt(((3574+61389)*0.0492)*(1-0.0492)))
+```
+
+The probability of having the current "Heavy Drinker, Female, Diagnosed" sample, is very low, given the Heavy Drinker rate for the overall female population.   
+
+We have enough evidence to say that **depressed females tend to have higher rates of heavy alcohol cosumption** than the average non institutionalized US adult female.
+
+**Conclusion**       
+According to the 2013 BRFSS survey data, **depression and heavy alcohol consumption are positively associated**.      
+Being a retrospective observational study, we cannot infer causation: whether a history of depression leads to heavy drinking, or heavy drinking leads to depression, remains unknown.     
+Additionally, we have not investigated potential confounding variables of the existing association between heavy drinking and history of depression diagnosis; and, the BRFSS database relies heavily on the respondent's own perceptions and self-awareness, so both depression diagnosis history and alcohol consumption habits may be unprecise.
+
+###**Research question 3:**
+
+We are interested in understanding whether marital status can be associated with a history of depression diagnosis, and whether living alone or with other adults is a possible confounding factor.    
+
+We will examine only the set of respondents who have answered the question about marital status and the question about how many adults they live with (excluding "NA" for both questions).
+
+The chart below shows the distribution of number of adults in the household, excluding non respondents for both questions:
+
+```{r frequency adults in household}
+brfss2013_mar <- subset(brfss2013, !is.na(marital))
+ggplot(subset(brfss2013, !is.na(numadult)), aes(numadult)) +
+  geom_histogram(stat="count") +
+  labs(title = "Distribution of Number of Adults in the Household" , x = "Number of Adults" , y = "Count")
+```
+
+
+
+The distribution of number of adults in the household is right-skewed, with a relatively small number of outliers who claim to live with 4 or more other adults.
+We will group them:
+
+```{r group 4 or more adults in the household}
+brfss2013_mar <- brfss2013_mar %>%
+  mutate(numadult = as.numeric(as.character(numadult))) %>%
+  mutate(numadult_grp = ifelse(numadult >= 4, "4 or more", numadult))
+ggplot(subset(brfss2013_mar, !is.na(numadult_grp)), aes(numadult_grp)) +
+  geom_bar() +
+  geom_text(stat = "count", aes(label = after_stat(count) , vjust = -0.3)) +
+  labs(title = "Grouped Distribution of Adults in the Household" , x = "Number of Adults" , y = "Count")
+brfss2013_mar %>%
+  filter(!is.na(numadult)) %>%
+  summarise("Mean Number of Adults in the Household" = mean(numadult), "Median" = median(numadult), "Maximum" = max(numadult))
+```
+
+In the chart below, we examine the distribution of number of adults in the household by marital status:
+
+```{r adults in household by marital status}
+ggplot(subset(brfss2013_mar, !is.na(numadult_grp)), aes(numadult_grp)) +
+  geom_bar() +
+  facet_wrap(~marital) +
+  coord_cartesian(ylim = c(0 , 200000)) +
+  geom_text(stat = "count", aes(label = after_stat(count) , vjust = -0.3)) +
+  labs(title = "Distribution of Adults in the Household by Marital Status" , x = "Number of Adults" , y = "Count")
+```
+
+We observe that both married people and unmarried people who are part of a couple who lives together tend to be the only two adults in the household; and that people who were once married (now divorced, separated or widowed) or never married tend to be the only adults in the household.
+
+Given that resemblance amongst groups, we will regroup the marital status to form two new groups:     
+**Couple**: "Married" + "A member of an unmarried couple"        
+**Not Couple**: "Divorced" + "Widowed" + "Separated" + "Never Married"
+
+```{r group marital status}
+brfss2013_mar <- brfss2013_mar %>%
+  mutate(marital_group = ifelse(marital == "Married" | marital == "A member of an unmarried couple" , "Couple" , "Not couple"))
+brfss2013_mar %>%
+  group_by(marital, marital_group) %>%
+  summarise("Count" = n())
+```
+
+We are interested in the depression diagnosis rate amongst these two groups: people who are part of a couple ("Couple") and people who are not ("Not Couple").
+
+The chart below shows such relationship between these two variables:
+
+```{r depression frequency by marital group}
+ggplot(subset(brfss2013_mar, !is.na(addepev2)), aes(addepev2)) +
+  geom_bar() +
+  facet_wrap(~marital_group) +
+  geom_text(stat = "count", aes(label = after_stat(count), vjust = -0.3)) +
+  labs(title = "Depression Diagnosis by Marital Group" , x = "Depression Diagnosis" , y = "Count")
+```
+
+At a glance, we observe that the number of people who have received a diagnosis of depressive disorder and are not part of a couple is higher than those who are part of a couple.
+**Is the difference actually significant?**
+
+We can calculate that de depression diagnosis rate of **people who are part of a couple is 16.32%**
+
+```{r Couple Depression Rate}
+brfss2013_mar %>%
+  filter(!is.na(addepev2)) %>%
+  filter(marital_group == "Couple") %>%
+    summarise("Depression Diagnosis Rate, Couple"= sum(addepev2 == "Yes") / n())
+```
+
+We can calculate that de depression diagnosis rate of **people who are not part of a couple is 23.51%**
+
+```{r NOT Couple Depression Rate }
+brfss2013_mar %>%
+  filter(!is.na(addepev2)) %>%
+  filter(marital_group == "Not couple") %>%
+    summarise("Depression Diagnosis Rate, Not couple"= sum(addepev2 == "Yes") / n())
+```
+
+We can attribute a Normal Distribution approximation to the variable "Depression Diagnosis" to conduct a hypothesis test on whether the difference in depression diagnosis rate  between "Couple" and "Not couple" is significantly different.
+
+```{r normal approximation to binomial couple}
+1-pnorm(51881, 0.1632735*(51881+168719) , sqrt(((51881+168719)*0.1632735)*(1-0.1632735)))
+```
+
+Considering the Depression Diagnosis rate of people who are part of a couple, it is virtually impossible (0% chance) to obtain a random sample of 220,600 individuals who are not part of a couple of which 51,881 have been diagnosed with depression.
+
+We have enough evidence to state that **people who are part of a couple tend to suffer less from depressive disorders than people who are not part of a couple**.
+
+**Conclusion:**       
+We have observed that people who are part of a couple living together, either married or not, tend to be the only two adults living in the same household, whereas people who are not part of a couple (independent of whether they have been married once, or not) tend to be the sole adult in the household.
+Analysing these two groups, we have found significantly different depression diagnosis rates: **people who are not part of a couple are 44% more likely to have been diagnosed with depression** at any point in time.   
+
+There is a potentially important timing factor that has not been part of this investigation: we have no information of when the depression diagnosis occured, if before or after marriage.     
+Our "Not part of a couple" group includes widows and divorcees, who may have received a depression diagnosis either before or after the end of their marriage - we may hypothesize that divorcees ended their marriage because it was making them depressed whereas widows became depressed because their partner died.         
+Additionally, we may hypothesize that people who are part of a couple living together who have never received a depression diagnosis have just not been married long enough: that they will inevitably develop depression when their partner passes away or when their life together becomes unbearable (bringing them into the "Not couple" group, which has higher depression diagnosis rates).
+
+## Overall Conclusion
+
+The 2013 Behavioral Risk Factors Surveillance System survey database brings us evidence that:    
+1) **Veterans are less likely to be diagnosed with depression**, which may be associated with by their **higher scepticism around mental illness treatment** effectiveness;       
+2) A history of depression is associated with **higher alcohol consumption**;        
+3) People who are **not part of a couple** that lives together are **more likely to be the only adult in the household**, and **more likely to have been diagnosed with depression** at some point in their lives. Among **couples who live together**, we are **less likely** to encounter someone with a history of depressive disorder.
+

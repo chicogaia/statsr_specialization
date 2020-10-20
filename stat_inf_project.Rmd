@@ -1,0 +1,187 @@
+---
+title: "Statistical inference with the GSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+on Space Exploration spending
+* * *
+
+## Part 1: Data
+
+The present dataset is an extract of the General Social Survey (GSS) cumulative of 1972-2012 respondents. The GSS is a project of the independent research organization NORC at the University of Chicago, with principal funding from the National Science Foundation. Its goal is to monitor and explain societal changes and trends of the complex American society via a survey of attitudes, behaviours and attributes of non-institutionalized US adults.     
+The data gathered by the GSS questionnaire is from a random sample of US adults (18 years old or more) thus generalizable to the entire US non-institutionalized adult population who speaks English and/or Spanish. This is an observational study, without random assignment of any kind: causal inferences are not possible.
+
+* * *
+
+## Part 2: Research question
+
+The present dataset contains data from 1972 to 2012, making it possible to analyze changes over time in the way Americans feel about different topics.
+
+In July 1969 American astronauts Neil Armstrong and Edwin Aldrin became the first humans ever to land on the surface of the moon.
+Crewed missions to the moon have ceased in December 1972, though; since then, no human being has touched that "rock" again.
+
+How has the Americans' point of view evolved over time since that first moon landing? And does it change significantly based on people's background, social, educational and/or economic profile?
+
+To answer that question, we will explore the answers to the GSS following question:
+*"[...] I'd like you to tell me whether you think we're spending too much money on [Space exploration program], too little money, or about the right amount."* 
+
+We will explore whether or not the proportion of respondents that believe the US is spending too much money on the Space Exploration Program has changed over time, and whether it is different for different groups inside the US adult non-institutionalized population. 
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+Considering the cumulative answers since 1972 until 2012, a majority of US adults believe their gorvernment spends too much on Space Exploration, as shown in the chart below (*Non respondents ("NA") not shown*):
+
+```{r}
+ggplot(subset(gss, !is.na(natspac)) , aes(natspac)) +
+  geom_bar() +
+  labs(title = "Number of Respondents for Space Exploration Spend" , x = "Level of Spend", y = "Number of Respondents")
+```
+
+###Changes over time
+
+Does the proportion of Americans who believe the US government spends too much on Space Exploration changes over the 40 years of GSS research?
+
+The last American crew has reached the moon in 1972.      
+It seems that it is translated in the GSS Survey by a decreasing proportion of respondents claiming that the US is spending too much on space exploration each decade, as shown in the chart below. In 2002 and 2012, a majority of respondents believe the US spend on that field is about right.
+
+```{r}
+gss_year <- gss %>%
+  filter(year == 1973 | year == 1982 | year == 1993 | year == 2002 | year == 2012)
+```
+
+```{r}
+ggplot(subset(gss_year, !is.na(natspac)), aes(natspac)) +
+  geom_bar() +
+  facet_wrap(~year) +
+  labs(title = "Number of Respondents for Space Exploration Spend by Year" , x = "Level of Spend", y = "Number of Respondents")
+```
+
+Whether or not these changes are statistically significant (1973 versus 2012) will be answered via statistical inference (hypothesis test) in the next session (*Part 4: Inference*).
+
+Is this approach towards Space Exploration different across different groups inside the US population?
+We have seen that, in 2012, a majority of respondents believe the government was sending too much on that field.     
+How does that proportion compare across groups?
+
+```{r}
+gss_2012 <- gss %>%
+  filter(year == 2012) %>%
+  filter(!is.na(natspac))
+```
+
+
+###Level of Education
+
+As shown in the chart below, the highest proportion of US adults who believe the Space Exploration spend is about right is among those who have finished High School, without pursuing additional degrees afterwards.
+
+```{r}
+ggplot(subset(gss_2012, !is.na(degree)), aes(natspac)) +
+  geom_bar() +
+  facet_wrap(~degree) +
+  labs(title = "Number of Respondents for Space Exploration Spend by Level of Education" , x = "Level of Spend", y = "Number of Respondents")
+```
+
+Hypothesis testing in the next session will clarify whether or not such difference is statistically significant for the entire US non-institutionalized adult population.
+
+###Sex
+
+In 2012, a majority of both men and women believed believed their government was spending just the right amount on space exporation, as seen in the bar plot below:
+
+```{r}
+ggplot(gss_2012, aes(natspac)) +
+  geom_bar() +
+  facet_wrap(~sex) +
+  labs(title = "Number of Respondents for Space Exploration Spend by Sex" , x = "Level of Spend", y = "Number of Respondents")
+```
+
+At first glance, therefore, sex does not seem to be a factor of how the average US adult perceives their government's level of spending on Space programs.
+
+###Level of Confidence in Science
+
+The bar plot below suggests that the disbelief in science may be associated with a higher belief that the US government spends to much of its budget on Space Exploration, whereas higher degrees of belief in Scientific Institutions may be associated with a higher proportion of respondents who believe that the Space Program spend is about right.
+
+```{r}
+ggplot(subset(gss_2012, !is.na(consci)), aes(natspac)) +
+  geom_bar() +
+  facet_wrap(~consci) +
+  labs(title = "Respondents for Space Exploration Spend by Level of Confidence in Science" , x = "Level of Spend", y = "Number of Respondents")
+```
+
+
+* * *
+
+## Part 4: Inference
+
+All statistical inferences below will be conducted as hypothesis test based on the Central Limit Theorem, as conditions to conduct such analysis are met:      
+1) Observations in this study can be assumed to be independent;
+2) Study is conducted with random samplig;
+3) n.p>=10 and n(1-p)>=10
+
+All hypothsis test will be conducted at a confidence level of 5%: null hypothesis will be rejected for p-value<0.05 .
+
+###Changes over time
+
+We have seen in the previous session that while a majority of Americans believed the US was spending too much on Space Programs in 1973, in 2012 that proportion changed, with a majority of Americans claiming that their government spend in that field was about right.
+
+Can we infere that the overall public opinion on Space Exploration spend has changed between 1973 and 2012, with a lower proportion of US adults answering "Too Much" in 2012 versus 1973?
+
+```{r}
+gss_year_inf<- gss %>%
+  filter(year == 1973 | year == 2012) %>%
+  filter(!is.na(natspac)) %>%
+  mutate(natspac2 = ifelse(natspac == "Too Much", "Too Much", "Other"))
+```
+
+
+```{r}
+inference(y = natspac2 , x = year , data = gss_year_inf , statistic = "proportion", type = "ht", method = "theoretical", success = "Too Much" , alternative = "twosided")
+```
+
+In 1973, 61.3% of Americans believed the Spend in Space Exploration was too high.     
+In 2012, that proportion dropped to 33.0%.    
+
+We have sufficient evidence to infere that theres has been a change in the public opinion on that matter, and that, in the overall US adult population, less people believes the spend in Space Programs is too high in 2012 (p-value < 0.0001).
+
+###Sex
+
+```{r}
+inference(y = natspac2 , x = sex , data = gss_year_inf , statistic = "proportion", type = "ht", method = "theoretical", success = "Too Much" , alternative = "twosided")
+```
+
+Amongst males, 46.7% believe the US spend on Space Exploration is too high, whereas, amongst females, that proportion is 53.4%.
+At a confidence level of 5%, we have enough evidence that that proportion is different amongst men and women: the latter are more likely to believe that the spend on Space Programs is too high in the US.
+
+###Level of Confidence in Science and Level of Education
+
+The statiscal inference for the difference in proportion of respondents for the question regarding Space Exploration spend and its relation to their Level of Confidence in Science and Level of Education requires a ANOVA or Chi-Square test: we are conducting hypothesis test for proportions on categorical variable with more than two levels.
+
+##Conclusion:
+
+We have gathered enough evidence that:
+
+1) The proportion of Americans who believe that the US government is spending too much of its budget on Space Exploration has changed from 1973 to 2012, becoming smaller. That perception may be related to the fact that, in the early 70's, the media coverage on Space Exploration was at an all time high, following the first moon landing in 1969 and the additional crewed missions to the moon that followed until december 1972. Whether or not the actual spending on Space Programs has been trully smaller in 2012 has not been explored in this study; but the overall perception of the US adult population is that it has indeed diminished.       
+
+2) The proportion of women who believe that the US government is spending too much of its budget on Space Exploration is greater than that for men. Additional data and study is needed to try and explain why that is so - we may hypothesize that a high proportion of males tend to like matters of science fiction and would, therefore, lije to see more of it becoming a reality via Space Program investments.
+
+

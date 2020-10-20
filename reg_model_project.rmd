@@ -1,0 +1,584 @@
+---
+title: "Modeling and prediction for movies"
+output:
+  html_document:
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+```{r load-data}
+load("movies")
+```
+
+* * *
+
+# Part 1: DATA
+
+The data is a random sample of movies released before 2016 and some of their attributes, including critics ratings from Rotten Tomatoes (RT) website, as well as audience ratings from the IMDb platform.     
+The characteristics of pre-2016 movies may be different from the more recent ones, as well as critics and general audience preferences. Therefore, our prediction model may not be replicable to newer movies.     
+Geographic differences may also exist, by which critics and the general public would potentially have different criteria in evaluating the movies they watch in different parts of the world.
+
+Other potential implications:     
+RT is an aggregator of reviews from critics (that are read by RT staff), that also features a score from the audience; whereas IMDb features only a score given by votes from the IMDb website and/or mobile app users.
+In that sense, IMDb rating may be a more reliable measure of how a movie is perceived by the target audience, since RT rating is based not only on the review given by a critic - who may have very different criteria than the general audience for what is a "good movie" - but also on the critic reader (RT staff) who is the one to decide whether a particular review is positive or negative. Furthermore, critics scores are based on a much smaller number of critics than the number of viewers rating movies in IMDb, thus being potentially more biased by individual preferences.
+
+For our analysis and prediction model, we will use hypothesis testing with significance level of 5%: we will reject the null hypothesis for p-value<0,05.
+
+* * *
+
+# Part 2: RESEARCH QUESTION
+
+What key attributes are significant predictors of higher audience ratings in IMDb?
+
+Being a consumer centric company, Paramount Pictures has interest in monitoring a specific Business Performance Indicator that expresses the target customer (movie viewers) perception on its products (movies).   
+Once such indicator is defined, it becomes relevant for the business to identify the variables associated with better perception of movie quality by the viewers.
+
+* * *
+
+# Part 3: EXPLORATORY DATA ANALYSIS
+
+## Defining the Key Performance Indicator
+
+Are the scores given by the audience and the ones given by critics correlated?      
+Are audience scores in the IMDb platform and those in the RT platform correlated?      
+What is the best measure of success for Paramount Pictures movies?   
+
+### Movie popularity at a glance
+
+Movie ratings in the IMDb platform are distributed around the mean `r mean(movies$imdb_rating)` and median `r median(movies$imdb_rating)` , in a scale from 1 to 10:
+
+```{r}
+ggplot(data=movies, aes(x=imdb_rating)) + geom_density() + xlab("IMDb Ratings") + ylab("Density")
+```
+
+On the other hand, critics scores, given by the Rotten Tomatoes platform, tend to be more distributed across the full range of values, with mean `r mean(movies$critics_score)` , in a scale from 1 to 100:
+
+```{r}
+ggplot(data=movies, aes(x=critics_score)) + geom_density() + xlab("Critics Score") + ylab("Density")
+```
+
+In light of this observation, we may conclude that, in a number of cases, poorly reviewed movies by critics receive better ratings by the general audience (although each measured on its own scale).    
+**Movie critics seem to be more discerning about the movies they evaluate then the general public, who may actually like a movie that critics don't.**
+
+```{r}
+movies_PP <- subset(movies, studio == "Paramount Pictures")
+```
+
+According to the present sample, Paramount Pictures movies ratings on IMDb mean is `r mean(movies_PP$imdb_rating)` and its critics' scores mean is `r mean(movies_PP$critics_score)` .
+
+```{r}
+ggplot(data=movies_PP, aes(x=imdb_rating)) + geom_density() + xlab("Paramount Pictures IMDb Rating") + ylab ("Density")
+ggplot(data=movies_PP, aes(x=critics_score)) + geom_density() + xlab("Paramount Pictures Critics Score") + ylab("Density")
+```
+
+Hypothesis testing is recommended to evaluate whether this is significantly higher than the total sample IMDb rating mean and critics score mean.
+
+In the following sections of this report, we will explore whether ot not these scores - both from critics and the general audience - are significantly correlated to any other variables present in our sample.
+
+Furthermore, in the eyes of the critics, the "Rotten" movie category is more differentiated from the other two categories:
+
+```{r}
+ggplot(data=movies, aes(x=critics_rating, y=critics_score)) + geom_boxplot() + xlab("Critics Rating") + ylab("Critics Score")
+```
+
+```{r}
+criticsscore_criticsrating = lm(critics_score ~ critics_rating, data=movies)
+summary(criticsscore_criticsrating)
+```
+
+Movies in the "Fresh" and "Rotten" category are expected to score, on average, respectively, 9.5 and 55.3 points less than "Certified Fresh" movies.
+
+In the eys of the public, however, such differentiation is less clear:
+
+```{r}
+ggplot(data=movies, aes(x=critics_rating, y=imdb_rating)) + geom_boxplot() + xlab("Critics Rating") + ylab("IMDb Score")
+```
+
+```{r}
+imdbrating_criticsrating = lm(imdb_rating ~ critics_rating, data=movies)
+summary(imdbrating_criticsrating)
+```
+
+For the general audience, movies in the "Fresh" and "Rotten" category are expected to score, on average, respectively, 0.4 and 1.6 points less than "Certified Fresh" movies.
+
+Since critics' score is presented in a scale from 1 to 100 and IMDb score is presented in a scale from 1 to 10, we can compare these coefficients more meaningfully by bringing IMDb scores into a scale from 1 to 100.
+
+So, assuming "Certified Fresh" movies average score as baseline (zero), and bringing both scores to a 1 to 100 scale, we have:
+
+Movie Category  | Diff. avg. score for critics (rel. baseline) | Diff. avg. score for audience (rel. baseline)
+----------------|----------------------------------------------|----------------------------------------------
+Certified Fresh | 0                                            | 0
+Fresh           | -9.5                                         | -4.5
+Rotten          | -55.4                                        | -16.2
+
+**Movie experts tend to be more critical of "Rotten" movies, relative to "Certified Fresh" movies, than the general audience is.**
+
+### Model 1: predicting IMDb rating from critics' rating
+
+A simple linear regression model looking into predicting the IMDb rating from the critics rating suggests that the latter is a significant predictive factor of the general public score for a movie: "Fresh" movies tend to have, in average, -0.4 points in IMDb score than "Certified Fresh" movies, and "Rotten" movies tend to have -1.6 points in IMDb score than "Certified Fresh" movies.
+
+```{r}
+summary(imdbrating_criticsrating)
+```
+
+But, with an R-squared of 0.4044, the model has a moderately high degree of uncertainty. The Critics rating explains only ~40% of the variation in the audience rating.      
+**There must be other significant factors playing into what makes a movie achieve high IMDb scores than just critics reviews.**
+
+Model Diagnostics:
+
+```{r}
+ggplot(data=imdbrating_criticsrating, aes(x= .resid)) + geom_histogram(binwidth = 0.3) + xlab("Residuals") + ylab("Count")
+ggplot(data=imdbrating_criticsrating, aes(sample = .resid)) + stat_qq()
+```
+
+Residuals have a nearly Normal distribution around zero, although slightly right-skewed.
+
+
+### Model 2: predicting IMDb ratings from critics' score
+  
+As demonstrated in Model 1, and illustrated by the chart below, although critics rating is a significant factor in predicting IMDb scores, variability is high, thus giving us a high level of uncertainty, especially for "Rotten" movies.
+
+```{r}
+ggplot(data=movies, aes(x=critics_rating, y=imdb_rating)) + geom_boxplot() + xlab("Critics Rating") + ylab("IMDb Score") + geom_hline(yintercept = 6, linetype = "dashed") + geom_hline(yintercept = 8, linetype = "dashed")
+```
+
+In the range 6-8 IMDb points, critics ratings can vary from "Rotten" to "Certified Fresh".
+
+**Can we improve the predictability of IMDb scores by replacing crtics' rating by critics score?**     
+The rationale is that changing the categorical variable for the numerical one gives our line of best fit more *"wiggle room"*, based on the least squares method.
+
+```{r}
+ggplot(data=movies, aes(x=critics_score, y=imdb_rating)) + geom_point() + geom_smooth(method=lm) + xlab("Critics Score") + ylab("IMDb Rating")
+imdbrating_criticsscore = lm(imdb_rating ~ critics_score, data=movies)
+summary(imdbrating_criticsscore)
+ggplot(data=imdbrating_criticsscore, aes(x=.fitted, y=.resid)) + geom_point() + geom_hline(yintercept=0, linetype="dashed")
+```
+
+Model 2 has indeed a best fit than Model 1: R-squared=0.5853 (vs R-squared=0.4044 for model 1).     
+However, the distribution of residuals is still not perfectly random: higher variability in IMDb scores is expected for lower critics' ratings.
+
+**In practical terms, that suggests that the general public frequently likes a movie when critics don't.**
+
+
+### Model 3: Are RT and IMDb audience scores correlated?
+
+```{r}
+ggplot(data=movies, aes(x=imdb_rating, y=audience_score)) + geom_point() + geom_smooth(method=lm) + xlab("IMDb Audience Score") + ylab("RT Audience Score")
+audiencescore_imdbrating = lm(audience_score ~ imdb_rating, data=movies)
+summary(audiencescore_imdbrating)
+```
+
+Scores given by the audience in both platfotms are strongly correlated, and model diagnostics, represented by the normal probability plot below, shows that conditions for linear regression are met (with exception of a few extreme values).
+
+```{r}
+ggplot(data=audiencescore_imdbrating, aes(sample = .resid)) + stat_qq()
+```
+
+### Conclusion:
+
+Predicting the audience rating from the critics rating alone comes with a moderately high degree of uncertainty.
+Critics' and audiences' ratings may differ, especially for lower rated movies by critics.      
+**Movie experts and the general public may have different criteria when it comes to rating movies.**
+
+Nevertheless, the three models presented above help us guide our decision on what to define as a Performance Indicator for a movie: critics' reviews or audience scores?
+
+We may draw different conclusions around a movie popularity performance assessing it by the eyes of the critics or by the eyes of the audience *(eg. the comedy "Happy, Texas", by Miramax Films, released in 1999, present in this dataset, is "Certified Fresh" according to critics, but has a score of 54/100 by the audience)*.
+
+The audience is Paramount Pictures' final customer, whom the company seek to etertain with what they do best: movies.
+The public opinion is the one that matters to Paramount Pictures and should be the final purpose of what they do.
+
+**That is the reason why we suggest using audiences scores from IMDb as a Key Performance Indicator for movies.**
+
+Therefore, in the present study, our measure of success, the popularity of a movie, is defined as IMDb rating.
+*"What attributes make a movie popular?"*, then, can be translated into *"What attributes are predicitive of higher IMDb scores?"*
+
+***
+
+# Part 4: MODELING
+
+## What attributes are predictive of movie popularity?
+
+The dataset provides us with a number of attributes for each movie. We don't expect all of them to be relevant for how a movie is perceived by the audience.
+
+Our approach for answering the object-question of this study is a linear multivariate regression analysis with stepwise bacward elimination based on p-value: we will start wilth a *"full"* model, including all relevant, non-collinear variables, and remove the parameter with highest p-value at each step.
+
+### CHECKING FOR COLLINEARITY
+
+As we have demonstrated in the section *Defining the Key Performance Indicator* and shown in the chart below, the audience ratings in RT and in IMDb are strongly correlated: they are representative of the same measure (only coming from different sources): both cannot be included in the same model.
+
+```{r}
+ggplot(data=movies, aes(x=imdb_rating, y=audience_score)) + geom_point() + geom_smooth(method=lm) + xlab("IMDb Rating") + ylab("RT Rating")
+summary(audiencescore_imdbrating)
+```
+
+As previously exposed, we have chosen IMDb scores as our measure for the popularity of movies: it is a more popular platform than Rotten Tomatoes, giving us larger pools of votes for each movie.
+
+Additionally, we will choose to include the critics' score, rather than critics ratings in our model.         
+In the previous section, we have demonstrated that the critics' score is a better predictor of IMDb scores than the critics' ratings (and the latter is a function of the first one; they cannot both be included in the same model, as collinearity would be present, as shown below).
+
+```{r}
+ggplot(data=movies, aes(x=critics_rating, y=critics_score)) + geom_boxplot() + xlab("Critics Ratings") + ylab("Critics Score")
+criticsscore_criticsrating = lm(critics_score ~ critics_rating, data=movies)
+summary(criticsscore_criticsrating)
+```
+
+### STEP 1: THE FULL MODEL
+
+Model: *imdbrating_full*    
+Including all relevant variables into the *"full"* model:
+
+Variables included                                                                   | 
+-------------------------------------------------------------------------------------|--
+Genre                                                                                |
+Run time                                                                             |
+MPAA rating                                                                          |
+Critics score                                                                        |  
+Whether or not the movie was nominated for best picture Oscar                        |
+Whether or not the movie won best picture Oscar                                      |
+Whether or not the leading actor, actress and/or director ever won an Oscar          |
+Whether or not the movie is featured on the Top 200 box office list on BoxOfficeMojo |
+
+
+```{r}
+imdbrating_full = lm(imdb_rating ~ genre
++ runtime
++ mpaa_rating
++ critics_score
++ best_pic_nom
++ best_pic_win
++ best_actor_win
++ best_actress_win
++ best_dir_win
++ top200_box,
+data=movies)
+summary(imdbrating_full)
+```
+
+### STEP 2: FIRST EXCLUSION
+Removal of attribute with highest p-value: whether or not the movie won best picture Oscar (best_pic_win)
+
+Model: *imdbrating_full2*
+
+```{r}
+imdbrating_full2 = lm(imdb_rating ~ genre
++ runtime
++ mpaa_rating
++ critics_score
++ best_pic_nom
++ best_actor_win
++ best_actress_win
++ best_dir_win
++ top200_box,
+data=movies)
+summary(imdbrating_full2)
+```
+
+###STEP 3: SECOND EXCLUSION
+Removal of attribute with highest p-value: whether or not the leading actress ever won an Oscar (best_actress_win)
+
+Model: *imdbrating_full3*
+
+```{r}
+imdbrating_full3 = lm(imdb_rating ~ genre
++ runtime
++ mpaa_rating
++ critics_score
++ best_pic_nom
++ best_actor_win
++ best_dir_win
++ top200_box,
+data=movies)
+summary(imdbrating_full3)
+```
+
+### STEP 4: THIRD EXCLUSION
+Removal of attribute with highest p-value: whether or not the leading actor ever won an Oscar (best_actor_win)
+
+Model: *imdbrating_full4*
+
+```{r}
+imdbrating_full4 = lm(imdb_rating ~ genre
++ runtime
++ mpaa_rating
++ critics_score
++ best_pic_nom
++ best_dir_win
++ top200_box,
+data=movies)
+summary(imdbrating_full4)
+```
+
+### STEP 5: FOURTH EXCLUSION
+Removal of attribute with highest p-value: whether or not the director ever won an Oscar (best_dir_win)
+
+Model: *imdbrating_full5*
+
+```{r}
+imdbrating_full5 = lm(imdb_rating ~ genre
++ runtime
++ mpaa_rating
++ critics_score
++ best_pic_nom
++ top200_box,
+data=movies)
+summary(imdbrating_full5)
+```
+
+### STEP 6: FIFTH EXCLUSION
+Removal of attribute with highest p-value: MPAA rating (mpaa_rating)
+
+Model: *imdbrating_full6*
+
+```{r}
+imdbrating_full6 = lm(imdb_rating ~ genre
++ runtime
++ critics_score
++ best_pic_nom
++ top200_box,
+data=movies)
+summary(imdbrating_full6)
+```
+
+### STEP 7: SIXTH EXCLUSION
+Removal of attribute with highest p-value: whether or not the movie is featured in the Top 200 Box Office list on BoxOfficeMojo (top200_box)
+
+Model: *imdbrating_full7*
+
+```{r}
+imdbrating_full7 = lm(imdb_rating ~ genre
++ runtime
++ critics_score
++ best_pic_nom,
+data=movies)
+summary(imdbrating_full7)
+```
+
+After *STEP 7*, all remaining attributes are statistically sgnificant predictors of IMDb ratings.      
+With Adjusted R-squared = 0.6275 , *imdbrating_full7* represents a statistical improvement over *Model 2: predicting IMDb ratings from critics' score* in the section *Defining the Key Performance Indicator*, a simple linear regression with R-squared = 0.5853 .
+
+**A multiple linear regression model including movie *genre*, *run time*, *critics score* and *nomination to best picture Oscar* is better at predicting IMDb Ratings than a simple regression considering only the critics' score.**
+
+###MODEL DIAGNOSIS:
+
+```{r}
+ggplot(data=imdbrating_full7, aes(x= .resid)) + geom_histogram(binwidth = 0.3) + xlab("Residuals") + ylab("Count")
+ggplot(data=imdbrating_full7, aes(sample = .resid)) + stat_qq()
+```
+
+Residuals are nearly normally distributed around zero.
+
+```{r}
+ggplot(data = imdbrating_full7, aes(x= .fitted, y= .resid)) + geom_point() + geom_hline(yintercept = 0, linetype="dashed") + xlab("Fitted Values") + ylab("Residuals")
+```
+
+Residuals plot and its normal probability distribution show that we can expect greater variance for lower scores - as we have seen before in the section *Model 2: predicting IMDb ratings from critics' score*
+
+**The inclusion of the additional variables (genre, run time, best picture nominee) has not been enough to explain the error associated with lower scores.**
+
+That is the reason why, although our parameters are statiscally significant predictors of IMDb scores (p-value<0.05), there is still a moderately high level of uncertainty associated with that prediction: the model explains ~63% of movies' scores variations, as given by IMDb users (Adjusted R-squared = 0.6275). A remaining ~37% of IMDb scores variations are not captured by these variables.
+
+**There are certainly other factors not currently known (not present in the model) affecting the popularity of movies, as expressed by IMDb users.**
+
+###MODEL INTERPRETATION:
+
+**GENRE:**
+All else being equal, relative to Action & Adventure movies,
+**Documentary** movies are expected to have, on average, a higher IMDb score, by 0.6 point; and **Art House & International** movies are expected to have, on average, a higher IMDb score, by 0.4 points.
+
+Considering the sgnificance level of this study (5%), we cannot make inferences about any other genres' average IMDb scores, according to this model.
+
+That is consistent with the chart below:
+
+```{r}
+ggplot(data=movies, aes(x=genre, y=imdb_rating)) + geom_boxplot() + xlab("Movie Genre") + ylab("IMDb Rating")
+```
+
+It may seem surprising that Documentaries and Art House & International movies would be, on average, more popular than Action & Adventure movies.
+
+We hypothesize that this is due to the fact that Documentaries would be seen - and rated - by a smaller audience, who is in fact already interested in the Documentaries they choose to watch, thus biasing the scores they give this movie genre, in general.
+
+That hypothesis of a smaller audience for Documentaries is sustained by the fact that this genre, on average, has a significant lower number of votes, than Action & Adventure movies; a similar fact is observed for Art House & International movies.
+
+With the information provided, we cannnot discard however, other possible reasons (e.g. the Documentary audience is simply not that keen on rating movies on IMDb).
+
+```{r}
+votes_genre = lm(imdb_num_votes ~ genre, data=movies)
+summary(votes_genre)
+```
+
+Relative to Action & Adventure movies,
+**Documentaries** are expected to receive 74,113 less votes (p-value=0.0003);      
+**Art House and International** movies, 70,762 less votes (p-value=0.0299).
+
+No similar inference can be made about any other genre, in terms of number of votes, relative to Action & Adventure movies, at the significance level (5%) of this study.
+
+That is consistent with the chart below:
+
+```{r}
+ggplot(data=movies, aes(x=genre, y=imdb_num_votes)) + geom_boxplot() + xlab("Movie Genre") + ylab("Votes on IMDb")
+```
+
+**CRITICS SCORE:**
+The opinion of critics, as presented by Rotten Tomatoes (RT), is the most significant predictive factor (lowest p-value among all attributes in the model) for how popular a movie can become, in terms of IMDb score.
+
+All else being equal, for every 10 points increase in RT critics' score, IMDb ratings are expected to increase by 0.2 points.   
+*(in this case, it makes sense to present the coefficient **interpretation** as if multiplied by 10 because RT critics score is in a scale from 1-100 whereas IMDb audience ratings ranges from 1-10)*.
+
+As the critics' opinion tends to come early in the releasing of a movie, it may in fact have an influence on how that movie will be perceived by the general public (and, then, rated in IMDb), who will watch it after being exposed to critics' reviews.    
+**We may be faced with a causation factor for this specific parameter.**
+
+However, as we have demonstrated in *Model 2: predicting IMDb ratings from critics' score*, and illustrated in the chart below, although critics rating is a significant factor, variability is high - thus giving us a moderately high level of uncertainty.
+
+```{r}
+ggplot(data=movies, aes(x=critics_score, y=imdb_rating)) + geom_point() + geom_smooth(method=lm) + xlab("Critics Score") + ylab("IMDb Rating")
+```
+
+For lower critics' scores, IMDb ratings vary more widely.      
+**It is frequent that a movie poorly rated by the critics becomes popular with the general audience.**
+
+Moreover, the boxplot below shows that all kinds of critics' ratings are found for movies ranging between ~6 to ~8 points in IMDb score (which is the reason behind our model utilizing critics scores, rather than critics ratings, which was  discussed in *Model 2: predicting IMDb ratings from critics' score*).
+
+```{r}
+ggplot(data=movies, aes(x=critics_rating, y=imdb_rating)) + geom_boxplot() + xlab("Critics Rating") + ylab("IMDb rating") + geom_hline(yintercept=6, linetype="dashed") + geom_hline(yintercept=8, linetype="dashed")
+```
+
+**RUN TIME:**
+According to the model, when combined with the other factors, run time is a significant predictor of IMDb scores, that are, on average, expected to increase by 0.007 points for every extra 1 minute in run time.
+
+Although that is with significance into the model (p-value<0,05), it **may not be escalable onto practical terms**.     Pramount Pictures producers should not look into increasing the length of a movie expecting sgnificant changes in audience ratings: it would take an extra 100 minutes to potentially achieve 0.7 extra IMDb score point *(assuming the linear coefficient is sustained at the new movie length)*.
+
+The average run time of a movie (according to this random sample) is 106 minutes; so that would mean virtually doubling the movie length in order to achieve that extra 0.7 IMDb point, which could be undoable from a business budget standpoint, and also could not make sense from a storytelling standpoint.
+
+Furthermore, we do not know whether the linear coefficient can be assumed unchanged at ~200 minutes movie length.
+
+In fact, the chart below, a normal probability plot of an attempted linear regression between run time and IMDb rating suggests that such relationship loses linearity in the extreme values - lowest and highest movie lengths.
+
+```{r}
+imdbrating_runtime = lm(imdb_rating ~ runtime, data=movies)
+summary(imdbrating_runtime)
+ggplot(data=imdbrating_runtime, aes(sample = .resid)) + stat_qq()
+```
+
+
+**BEST PICTURE NOMINEE:**
+Being nominated for best picture is a statistically significant predictor of higher IMDb scores (p-value=0.0369): movies with this nomination are expected to have, on average, 0.3 points higher IMDb scores than those that were not nominated.
+
+Whether or not there is a causation effect here, is uncertain.      
+More data is needed to clarify the timing effect of this question: what was the IMDb score before the nomination? Did it increase afterwards - or did it remain unchanged?
+
+In the first scenario (IMDb rating increased after nomination), we might hypothesize that the fact that a movie gets a nomination has an influence on how it is perceived by the general audience, thus impacting its score.
+In the second scenario (IMDb rating remained unchanged after nomination), being a best picture nominee is not causing scores to be significantly higher but, rather, both are symptoms of a generally good movie.
+
+* * *
+
+## Part 5: PREDICTION
+
+We can use our final model to predict the popularity, measured by IMDb rating, of a new movie.   
+
+We have discussed in the section *Part 1: DATA* that popularity attributes may change over time, and our model may not be fit to movies released after 2016.
+
+The chosen movie for our prediction is: *Joker*, released in 2019, directed by Todd Phillips.
+
+#Movie: **Joker**
+
+![Movie: Joker, 2019][Joker]
+
+The relevant attributes to be considered for our model are:
+
+Attribute     | Value
+--------------|--------
+Genre         | Drama
+Run Time      | 122
+Critics Score | 72
+Nomination    | Yes
+
+```{r}
+Joker <- data.frame(genre="Drama" , runtime = 122 , critics_score = 72 , best_pic_nom = "yes")
+predict(imdbrating_full7, Joker, interval = "prediction", level = 0.95)
+```
+
+Our model predicts, in a 95% confidence interval, that the movie *Joker* will have an IMDb score between **6.0 and 8.6**
+
+According to the IMDb website *(visited on June 21st 2020)*, *Joker* score is **8.5**, thus **inside** the 95% confidence interval of our model.
+
+It is important to notice the high range of our confidence interval: it covers 2.6 points on a score scale from 1 to 10. We have seen that our model explains 63% of the popularity variability of movies. Factors other the ones included in this model are likely to be also important in determining movie popularity.        
+
+We have also seen that the variability is higher for movies with lower scores.
+As an empirical test and example, we can check our model prediction for a less popular movie: *365 Days*, released in 2020.
+
+#Movie: **365 Days**
+
+![Movie: 365 Days, 2020][365]
+
+Attribute     | Value
+--------------|--------
+Genre         | Drama
+Run Time      | 114
+Critics Score | 11
+Nomination    | No
+
+```{r}
+TSFDays <- data.frame(genre = "Drama", runtime = 114, critics_score = 11, best_pic_nom = "no")
+predict(imdbrating_full7, TSFDays, interval = "prediction" , level=0.95 )
+```
+
+Our model predicts, in a 95% confidence interval, that the movie *365 Days* will have an IMDb score between **4.1 and 6.7**     
+
+According to the IMDb website *(visited on June 21st 2020)*, *365 Days* score is **3.6**, thus **outside** the 95% confidence interval of our model.        
+That may be related to the higher uncertainty (lower predictability) of lower rated movies.
+
+Finally, how would the model behave with a movie from a different genre released before 2016?      
+Can it accurately predict the popularity of *Love Actually*, released in 2003?
+
+#Movie: **Love Actually**
+
+![Movie: Love Actually, 2003][Love_actually]
+
+Attribute     | Value
+--------------|--------
+Genre         | Comedy
+Run Time      | 135
+Critics Score | 63
+Nomination    | No
+
+```{r}
+LoveActually <- data.frame(genre = "Comedy", runtime = 135, critics_score = 63, best_pic_nom = "no")
+predict(imdbrating_full7 , LoveActually , interval = "prediction" , level=0.95)
+```
+
+Our model predicts, in a 95% confidence interval, that the movie *Love Actually* will have an IMDb score between **5.3 and 7.9**     
+
+According to the IMDb website *(visited on June 21st 2020)*, *Love Actually* score is **7.6**, thus **inside** the 95% confidence interval of our model.
+
+* * *
+
+## Part 6: CONCLUSION
+
+Being a consumer centric company, Paramount Pictures has defined audience rating as a Key Performance Indicator to be monitored. Being the most popular movie rating platform, we have chosen IMDb scores as our measure for movie popularity.
+
+Looking into driving business performance, we have developed a predictive model for IMDb scores that suggests four key variables as significant predictors of movie popularity: genre, critics' score, run time and nomination to best picture Oscar.          
+Such model can be applied in the early weeks after releasing a new movie (when critics scores are already available, but audience ratings are still building up) to predict the overall popularity of the movie for the following months or years: that can help Paramount Pictures adjust its revenue forecasts for a particular movie (which would require a separate predictive model of *Movie Generated Revenue* by *Movie Popularity*).
+
+Additionally, our model can give insight into actionable items to consider when planning the production of a new movie:
+Paramount Pictures may choose to invest in Documentaries, acting on a specific, smaller niche: we suggest further investigation of such market in other studies to come.       
+Our model suggests that investing in movies with best picture award potential is likely to be translated into increased popularity, provided that such movies get nominated. We suggest further investigation on what key attributes are significant predictors of best picture Oscar nomination.       
+We do not suggest Paramount Pictures to act on run time: the statistical significance of this parameter is likely not an actionable item in practical terms.
+
+Finally, according to our model, casting of directors and leading actor/actress based on award winning history is not a significant predicitive factor for audience rating. However, we have not investigated whether it is a significant factor for ticket purchasing - which could be a very relevant new study to be conducted, from a business profitability standpoint.
+
+[Joker]:C:\Users\i0308292\Desktop\Cursos\R Programming\Duke Linear Regression\Linear Regression Modeling_Final\Final Submission/Joker_(2019).jpg
+[Love_actually]:C:\Users\i0308292\Desktop\Cursos\R Programming\Duke Linear Regression\Linear Regression Modeling_Final\Final Submission/Love_Actually.jpg
+[365]:C:\Users\i0308292\Desktop\Cursos\R Programming\Duke Linear Regression\Linear Regression Modeling_Final\Final Submission/365.png
